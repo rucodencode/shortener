@@ -9,7 +9,7 @@ var Options struct {
 
 func InitOptions() {
 	flag.StringVar(&Options.RunAddr, "a", ":8080", "address and port to run server")
-	flag.StringVar(&Options.BaseURL, "b", "http://localhost:8000", "base url")
+	flag.StringVar(&Options.BaseURL, "b", "http://localhost:8080", "base url")
 
 	flag.Parse()
 }
