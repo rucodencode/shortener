@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rucodencode/shortener/internal/config"
 	"github.com/rucodencode/shortener/internal/handler"
 	"github.com/rucodencode/shortener/internal/repository"
 	"github.com/rucodencode/shortener/internal/service"
@@ -29,14 +31,14 @@ func NewRouter(linkHandler *handler.LinkHandler) http.Handler {
 }
 
 func main() {
-	addr := ":8080"
-	baseURL := "http://localhost:8080"
+	config.InitOptions()
 
 	repo := repository.NewLinkRepository()
 	linkService := service.NewLinkService(repo)
-	linkHandler := handler.NewLinkHandler(linkService, baseURL)
+	linkHandler := handler.NewLinkHandler(linkService, config.Options.BaseURL)
 
 	router := NewRouter(linkHandler)
 
-	log.Fatal(http.ListenAndServe(addr, router))
+	fmt.Println("Running server on", config.Options.RunAddr)
+	log.Fatal(http.ListenAndServe(config.Options.RunAddr, router))
 }
