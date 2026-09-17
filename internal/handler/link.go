@@ -1,10 +1,11 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"net/http"
-	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/rucodencode/shortener/internal/service"
 )
 
@@ -31,7 +32,13 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	link, err := h.service.Create(originalURL)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, service.ErrInvalidURL) ||
+			errors.Is(err, service.ErrCodeCollision) {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -41,11 +48,21 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LinkHandler) Get(w http.ResponseWriter, r *http.Request) {
-	code := strings.TrimPrefix(r.URL.Path, "/")
+	code := chi.URLParam(r, "code")
+	if code == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
 	link, err := h.service.GetByCode(code)
 
 	if err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		if errors.Is(err, service.ErrNotFound) {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 

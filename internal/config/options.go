@@ -1,15 +1,19 @@
 package config
 
-import "flag"
+import (
+	"flag"
+)
 
-var Options struct {
-	RunAddr string
-	BaseURL string
+type options struct {
+	ServerAddress string
+	BaseURL       string
 }
 
-func InitOptions() {
-	flag.StringVar(&Options.RunAddr, "a", ":8080", "address and port to run server")
-	flag.StringVar(&Options.BaseURL, "b", "http://localhost:8080", "base url")
-
+func NewOptions() options {
+	options := options{}
+	flag.StringVar(&options.ServerAddress, "a", ":8080", "address and port to run server")
+	flag.StringVar(&options.BaseURL, "b", "http://localhost:8080", "base url")
 	flag.Parse()
+
+	return options
 }
