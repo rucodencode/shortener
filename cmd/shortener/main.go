@@ -6,7 +6,8 @@ import (
 	"net/http"
 
 	"github.com/rucodencode/shortener/internal/config"
-	"github.com/rucodencode/shortener/internal/handler"
+	"github.com/rucodencode/shortener/internal/handler/api"
+	"github.com/rucodencode/shortener/internal/handler/web"
 	"github.com/rucodencode/shortener/internal/logger"
 	"github.com/rucodencode/shortener/internal/repository"
 	"github.com/rucodencode/shortener/internal/router"
@@ -22,10 +23,10 @@ func main() {
 
 	repo := repository.NewLinkRepository()
 	linkService := service.NewLinkService(repo)
-	linkHandler := handler.NewLinkHandler(linkService, cfg.BaseURL)
+	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)
+	apiLinkHandler := api.NewLinkHandler(linkService, cfg.BaseURL)
 
-	router := router.NewRouter(linkHandler)
-	router = logger.RequestLogger(router)
+	router := router.NewRouter(webLinkHandler, apiLinkHandler)
 
 	fmt.Println("Running server on", cfg.ServerAddress)
 	log.Fatal(http.ListenAndServe(cfg.ServerAddress, router))
