@@ -7,11 +7,13 @@ import (
 	"github.com/rucodencode/shortener/internal/handler/api"
 	"github.com/rucodencode/shortener/internal/handler/web"
 	"github.com/rucodencode/shortener/internal/logger"
+	"github.com/rucodencode/shortener/internal/middleware"
 )
 
 func NewRouter(webHandler *web.LinkHandler, apiHandler *api.LinkHandler) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(logger.RequestLogger)
+	r.Use(middleware.GzipMiddleware)
 	RegisterWebRouters(r, webHandler)
 	RegisterAPIRouters(r, apiHandler)
 
