@@ -1,6 +1,6 @@
 package model
 
 type Link struct {
-	Code        string
-	OriginalURL string
+	Code        string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
 }

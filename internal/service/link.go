@@ -16,7 +16,7 @@ var (
 )
 
 type LinkRepository interface {
-	Save(link model.Link)
+	Save(link model.Link) error
 	FindByCode(code string) (model.Link, bool)
 	FindByOriginalURL(originalURL string) (model.Link, bool)
 }
@@ -48,7 +48,10 @@ func (s *LinkService) Create(originalURL string) (model.Link, error) {
 	}
 
 	link = model.Link{Code: code, OriginalURL: originalURL}
-	s.repo.Save(link)
+	err := s.repo.Save(link)
+	if err != nil {
+		return model.Link{}, err
+	}
 
 	return link, nil
 }
