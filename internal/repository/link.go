@@ -13,6 +13,7 @@ import (
 type LinkRepository struct {
 	mu              sync.Mutex
 	links           map[string]model.Link
+	codesByURL      map[string]string
 	fileStoragePath string
 }
 
@@ -28,8 +29,14 @@ func NewLinkRepository(fileStoragePath string) (*LinkRepository, error) {
 		return nil, err
 	}
 
+	codesByURL := make(map[string]string)
+	for code, value := range links {
+		codesByURL[value.OriginalURL] = code
+	}
+
 	return &LinkRepository{
 		links:           links,
+		codesByURL:      codesByURL,
 		fileStoragePath: fileStoragePath,
 	}, nil
 }
@@ -45,8 +52,11 @@ func (r *LinkRepository) Save(link model.Link) error {
 	defer file.Close()
 
 	r.links[link.Code] = link
+	r.codesByURL[link.OriginalURL] = link.Code
+
 	if err = json.NewEncoder(file).Encode(r.links); err != nil {
 		delete(r.links, link.Code)
+		delete(r.codesByURL, link.OriginalURL)
 		return err
 	}
 
@@ -65,11 +75,11 @@ func (r *LinkRepository) FindByOriginalURL(originalURL string) (model.Link, bool
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, link := range r.links {
-		if link.OriginalURL == originalURL {
-			return link, true
-		}
+	code, ok := r.codesByURL[originalURL]
+	if !ok {
+		return model.Link{}, false
 	}
 
-	return model.Link{}, false
+	link, ok := r.links[code]
+	return link, ok
 }

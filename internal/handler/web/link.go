@@ -6,17 +6,23 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rucodencode/shortener/internal/model"
 	"github.com/rucodencode/shortener/internal/service"
 )
 
+type LinkService interface {
+	Create(originalURL string) (model.Link, error)
+	GetByCode(code string) (model.Link, error)
+}
+
 type LinkHandler struct {
-	service *service.LinkService
+	service LinkService
 	baseURL string
 }
 
-func NewLinkHandler(service *service.LinkService, baseURL string) *LinkHandler {
+func NewLinkHandler(svc LinkService, baseURL string) *LinkHandler {
 	return &LinkHandler{
-		service: service,
+		service: svc,
 		baseURL: baseURL,
 	}
 }
@@ -32,8 +38,7 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	link, err := h.service.Create(originalURL)
 
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidURL) ||
-			errors.Is(err, service.ErrCodeCollision) {
+		if errors.Is(err, service.ErrInvalidURL) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}

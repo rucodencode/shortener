@@ -5,14 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 
 	"github.com/rucodencode/shortener/internal/model"
 )
 
 var (
-	ErrCodeCollision = errors.New("code collision")
-	ErrNotFound      = errors.New("not found")
-	ErrInvalidURL    = errors.New("invalid url")
+	ErrCodeGeneration = errors.New("failed to generate unique code")
+	ErrNotFound       = errors.New("not found")
+	ErrInvalidURL     = errors.New("invalid url")
 )
 
 type LinkRepository interface {
@@ -22,6 +23,7 @@ type LinkRepository interface {
 }
 
 type LinkService struct {
+	mu   sync.Mutex
 	repo LinkRepository
 }
 
@@ -36,24 +38,47 @@ func (s *LinkService) Create(originalURL string) (model.Link, error) {
 		return model.Link{}, err
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	link, found := s.repo.FindByOriginalURL(originalURL)
 	if found {
 		return link, nil
 	}
 
-	code := generateCode(originalURL)
-	_, found = s.repo.FindByCode(code)
-	if found {
-		return model.Link{}, ErrCodeCollision
+	const maxAttempts = 100
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		source := originalURL
+
+		if attempt > 0 {
+			source = fmt.Sprintf("%s:%d", originalURL, attempt)
+		}
+
+		code := generateCode(source)
+
+		existing, found := s.repo.FindByCode(code)
+		if found {
+			if existing.OriginalURL == originalURL {
+				return existing, nil
+			}
+
+			continue
+		}
+
+		link := model.Link{
+			Code:        code,
+			OriginalURL: originalURL,
+		}
+
+		if err := s.repo.Save(link); err != nil {
+			return model.Link{}, err
+		}
+
+		return link, nil
 	}
 
-	link = model.Link{Code: code, OriginalURL: originalURL}
-	err := s.repo.Save(link)
-	if err != nil {
-		return model.Link{}, err
-	}
-
-	return link, nil
+	return model.Link{}, ErrCodeGeneration
 }
 
 func (s *LinkService) GetByCode(code string) (model.Link, error) {
