@@ -5,11 +5,13 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/rucodencode/shortener/internal/model"
 )
 
 type LinkRepository struct {
+	mu              sync.Mutex
 	links           map[string]model.Link
 	fileStoragePath string
 }
@@ -33,6 +35,9 @@ func NewLinkRepository(fileStoragePath string) (*LinkRepository, error) {
 }
 
 func (r *LinkRepository) Save(link model.Link) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	file, err := os.OpenFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
@@ -49,11 +54,17 @@ func (r *LinkRepository) Save(link model.Link) error {
 }
 
 func (r *LinkRepository) FindByCode(code string) (model.Link, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	link, ok := r.links[code]
 	return link, ok
 }
 
 func (r *LinkRepository) FindByOriginalURL(originalURL string) (model.Link, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	for _, link := range r.links {
 		if link.OriginalURL == originalURL {
 			return link, true
