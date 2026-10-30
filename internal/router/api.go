@@ -1,12 +1,17 @@
 package router
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
-	"github.com/rucodencode/shortener/internal/handler/api"
 )
 
-func RegisterAPIRouters(r chi.Router, linkHandler *api.LinkHandler) {
+type ApiHandler interface {
+	Create(w http.ResponseWriter, r *http.Request)
+}
+
+func RegisterAPIRouters(r chi.Router, h ApiHandler) {
 	r.Route("/api", func(r chi.Router) {
-		r.Post("/shorten", linkHandler.Create)
+		r.Post("/shorten", h.Create)
 	})
 }
