@@ -6,11 +6,11 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type ApiHandler interface {
+type APIHandler interface {
 	Create(w http.ResponseWriter, r *http.Request)
 }
 
-func RegisterAPIRouters(r chi.Router, h ApiHandler) {
+func RegisterAPIRouters(r chi.Router, h APIHandler) {
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/shorten", h.Create)
 	})
