@@ -28,6 +28,8 @@ func main() {
 		log.Fatalf("Database connection failed: %v", err)
 	}
 
+	defer db.Close()
+
 	repo, err := repository.NewLinkRepository(cfg.FileStoragePath)
 	if err != nil {
 		log.Fatal("Rep didn't loaded")
