@@ -8,9 +8,9 @@ import (
 type RepoType string
 
 const (
-	RepoTypePostres RepoType = "postgres"
-	RepoTypeFile    RepoType = "file"
-	RepoTypeMemory  RepoType = "memory"
+	RepoTypePostgres RepoType = "postgres"
+	RepoTypeFile     RepoType = "file"
+	RepoTypeMemory   RepoType = "memory"
 )
 
 type Config struct {
@@ -54,7 +54,7 @@ func NewConfig() Config {
 	}
 
 	if cfg.DB.DataSourceName != "" {
-		cfg.RepoType = RepoTypePostres
+		cfg.RepoType = RepoTypePostgres
 	} else if cfg.FileStoragePath != "" {
 		cfg.RepoType = RepoTypeFile
 	} else {

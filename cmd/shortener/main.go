@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,6 +16,11 @@ import (
 	"github.com/rucodencode/shortener/internal/repository/link"
 	"github.com/rucodencode/shortener/internal/router"
 	"github.com/rucodencode/shortener/internal/service"
+
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -24,16 +30,39 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
-	if err != nil {
-		log.Fatalf("Database connection failed: %v", err)
+	var dbConn *sql.DB
+	var err error
+
+	if cfg.RepoType == config.RepoTypePostgres {
+		dbConn, err = db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
+		if err != nil {
+			log.Fatalf("failed to open DB conntection: %v", err)
+		}
+
+		if err = dbConn.Ping(); err != nil {
+			log.Fatalf("DB ping failed: %v", err)
+		}
+
+		driver, err := postgres.WithInstance(dbConn, &postgres.Config{})
+		if err != nil {
+			log.Fatalf("failed to create migrate driver: %v", err)
+		}
+
+		migrationPath := "file://./migrations"
+
+		m, err := migrate.NewWithDatabaseInstance(migrationPath, "postgres", driver)
+		if err != nil {
+			log.Fatalf("failed to create migrate instance: %v", err)
+		}
+		defer m.Close()
+		m.Up()
+
+		log.Println("Migrations applied successfully")
 	}
 
-	defer db.Close()
-
-	repo, err := link.NewLinkRepository(cfg, db)
+	repo, err := link.NewLinkRepository(cfg, dbConn)
 	if err != nil {
-		log.Fatal("Rep didn't loaded")
+		log.Fatalf("repository initialization failed: %v", err)
 	}
 
 	rt := router.NewRouter()
@@ -42,7 +71,7 @@ func main() {
 	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)
 	apiLinkHandler := api.NewLinkHandler(linkService, cfg.BaseURL)
 
-	repoHealth := repository.NewHealthRepository(db)
+	repoHealth := repository.NewHealthRepository(dbConn)
 	healthService := service.NewHealthService(repoHealth)
 	healthHandler := health.NewHealthHandler(healthService)
 

@@ -8,7 +8,7 @@ import (
 
 func NewLinkRepository(cfg config.Config, db *sql.DB) (LinkRepository, error) {
 	switch cfg.RepoType {
-	case config.RepoTypePostres:
+	case config.RepoTypePostgres:
 		return NewPostgresRepository(db)
 	case config.RepoTypeFile:
 		return NewFileRepository(cfg.FileStoragePath)
