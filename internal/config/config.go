@@ -5,6 +5,14 @@ import (
 	"os"
 )
 
+type RepoType string
+
+const (
+	RepoTypePostres RepoType = "postgres"
+	RepoTypeFile    RepoType = "file"
+	RepoTypeMemory  RepoType = "memory"
+)
+
 type Config struct {
 	ServerAddress   string
 	BaseURL         string
@@ -13,6 +21,7 @@ type Config struct {
 	DB              struct {
 		DataSourceName string
 	}
+	RepoType RepoType
 }
 
 func NewConfig() Config {
@@ -21,7 +30,7 @@ func NewConfig() Config {
 	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "base url")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "log level")
 	flag.StringVar(&cfg.FileStoragePath, "f", "storage.json", "file storage path")
-	flag.StringVar(&cfg.DB.DataSourceName, "d", "host=localhost port=5432 user=app_user password=app_password dbname=app_db sslmode=disable", "DB data source name")
+	flag.StringVar(&cfg.DB.DataSourceName, "d", "", "DB data source name")
 	flag.Parse()
 
 	if envServerAddress := os.Getenv("SERVER_ADDRESS"); envServerAddress != "" {
@@ -42,6 +51,14 @@ func NewConfig() Config {
 
 	if envDBDataSourceName := os.Getenv("DATABASE_DSN"); envDBDataSourceName != "" {
 		cfg.DB.DataSourceName = envDBDataSourceName
+	}
+
+	if cfg.DB.DataSourceName != "" {
+		cfg.RepoType = RepoTypePostres
+	} else if cfg.FileStoragePath != "" {
+		cfg.RepoType = RepoTypeFile
+	} else {
+		cfg.RepoType = RepoTypeMemory
 	}
 
 	return cfg

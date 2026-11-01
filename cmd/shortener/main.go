@@ -12,6 +12,7 @@ import (
 	"github.com/rucodencode/shortener/internal/handler/web"
 	"github.com/rucodencode/shortener/internal/logger"
 	"github.com/rucodencode/shortener/internal/repository"
+	"github.com/rucodencode/shortener/internal/repository/link"
 	"github.com/rucodencode/shortener/internal/router"
 	"github.com/rucodencode/shortener/internal/service"
 )
@@ -30,7 +31,7 @@ func main() {
 
 	defer db.Close()
 
-	repo, err := repository.NewLinkRepository(cfg.FileStoragePath)
+	repo, err := link.NewLinkRepository(cfg, db)
 	if err != nil {
 		log.Fatal("Rep didn't loaded")
 	}

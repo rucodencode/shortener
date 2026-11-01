@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rucodencode/shortener/internal/repository"
+	"github.com/rucodencode/shortener/internal/repository/link"
 	"github.com/rucodencode/shortener/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +19,7 @@ const baseURL = "http://localhost:8080"
 func newTestHandler(t *testing.T) *LinkHandler {
 	storagePath := filepath.Join(t.TempDir(), "storage.json")
 
-	repo, err := repository.NewLinkRepository(storagePath)
+	repo, err := link.NewFileRepository(storagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
