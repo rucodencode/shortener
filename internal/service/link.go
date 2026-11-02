@@ -16,6 +16,7 @@ var (
 	ErrCodeGeneration = errors.New("failed to generate unique code")
 	ErrNotFound       = errors.New("link not found")
 	ErrInvalidURL     = errors.New("invalid URL")
+	ErrAlreadyExists  = errors.New("link already exists")
 )
 
 type LinkService struct {
@@ -39,7 +40,7 @@ func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Li
 
 	link, err := s.repo.FindByOriginalURL(ctx, originalURL)
 	if err == nil {
-		return link, nil
+		return link, ErrAlreadyExists
 	}
 
 	if !errors.Is(err, linkrepo.ErrNotFound) {

@@ -65,9 +65,31 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	link, err := h.service.Create(r.Context(), req.URL)
 
+	sendResponse := func(link *model.Link, statusCode int) {
+		resp := CreateLinkResponse{
+			Result: h.baseURL + "/" + link.Code,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+
+		enc := json.NewEncoder(w)
+		if err := enc.Encode(resp); err != nil {
+			logger.Log.Debug("error encoding response", zap.Error(err))
+			return
+		}
+
+		logger.Log.Debug("sending HTTP response", zap.Int("status", statusCode))
+	}
+
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidURL) {
 			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		if errors.Is(err, service.ErrAlreadyExists) {
+			sendResponse(link, http.StatusConflict)
 			return
 		}
 
@@ -76,20 +98,7 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := CreateLinkResponse{
-		Result: h.baseURL + "/" + link.Code,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-
-	enc := json.NewEncoder(w)
-	if err := enc.Encode(resp); err != nil {
-		logger.Log.Debug("error encoding response", zap.Error(err))
-		return
-	}
-
-	logger.Log.Debug("sending HTTP response", zap.Int("status", http.StatusCreated))
+	sendResponse(link, http.StatusCreated)
 }
 
 func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +120,7 @@ func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 
 	links, err := h.service.CreateBatch(r.Context(), originalURLs)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidURL) {
+		if errors.Is(err, service.ErrInvalidURL) || errors.Is(err, service.ErrAlreadyExists) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
