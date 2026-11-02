@@ -106,7 +106,7 @@ func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 
 	originalURLs := make([]string, 0, len(items))
 	for _, v := range items {
-		originalURLs = append(originalURLs, v.OriginalUrl)
+		originalURLs = append(originalURLs, v.OriginalURL)
 	}
 
 	links, err := h.service.CreateBatch(r.Context(), originalURLs)
@@ -125,8 +125,8 @@ func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	results := make([]BatchCreateLinkResponse, 0, len(items))
 	for key, v := range links {
 		results = append(results, BatchCreateLinkResponse{
-			CorrelationId: items[key].CorrelationId,
-			ShortUrl:      h.baseURL + "/" + v.Code,
+			CorrelationID: items[key].CorrelationID,
+			ShortURL:      h.baseURL + "/" + v.Code,
 		})
 	}
 
