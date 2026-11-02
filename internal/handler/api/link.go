@@ -1,0 +1,143 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/rucodencode/shortener/internal/logger"
+	"github.com/rucodencode/shortener/internal/model"
+	"github.com/rucodencode/shortener/internal/service"
+	"go.uber.org/zap"
+)
+
+type CreateLinkRequest struct {
+	URL string `json:"url"`
+}
+
+type CreateLinkResponse struct {
+	Result string `json:"result"`
+}
+
+type BatchCreateLinkRequest struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type BatchCreateLinkResponse struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
+
+type LinkService interface {
+	Create(ctx context.Context, originalURL string) (*model.Link, error)
+	CreateBatch(ctx context.Context, originalURLs []string) ([]*model.Link, error)
+}
+
+type LinkHandler struct {
+	service LinkService
+	baseURL string
+}
+
+func NewLinkHandler(src LinkService, baseURL string) *LinkHandler {
+	return &LinkHandler{
+		service: src,
+		baseURL: baseURL,
+	}
+}
+
+func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
+	logger.Log.Debug("decoding request")
+	var req CreateLinkRequest
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Debug("cannot decode request JSON body", zap.Error(err))
+		http.Error(
+			w, "bad request",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	link, err := h.service.Create(r.Context(), req.URL)
+
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidURL) {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		logger.Log.Error("failed to create link", zap.Error(err))
+		return
+	}
+
+	resp := CreateLinkResponse{
+		Result: h.baseURL + "/" + link.Code,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(resp); err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+
+	logger.Log.Debug("sending HTTP response", zap.Int("status", http.StatusCreated))
+}
+
+func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
+	logger.Log.Debug("batch request started")
+	var items []BatchCreateLinkRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(&items); err != nil {
+		logger.Log.Debug("cannot decode batch request", zap.Error(err))
+		http.Error(w, "bad request: invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	originalURLs := make([]string, 0, len(items))
+	for _, v := range items {
+		originalURLs = append(originalURLs, v.OriginalURL)
+	}
+
+	links, err := h.service.CreateBatch(r.Context(), originalURLs)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidURL) {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		logger.Log.Error("failed to create batch links", zap.Error(err))
+
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	results := make([]BatchCreateLinkResponse, 0, len(items))
+	for key, v := range links {
+		results = append(results, BatchCreateLinkResponse{
+			CorrelationID: items[key].CorrelationID,
+			ShortURL:      h.baseURL + "/" + v.Code,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(results); err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+
+	logger.Log.Debug("sending HTTP response", zap.Int("status", http.StatusCreated))
+}
