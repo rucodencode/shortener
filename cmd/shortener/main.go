@@ -12,7 +12,6 @@ import (
 	"github.com/rucodencode/shortener/internal/handler/health"
 	"github.com/rucodencode/shortener/internal/handler/web"
 	"github.com/rucodencode/shortener/internal/logger"
-	"github.com/rucodencode/shortener/internal/repository"
 	"github.com/rucodencode/shortener/internal/repository/link"
 	"github.com/rucodencode/shortener/internal/router"
 	"github.com/rucodencode/shortener/internal/service"
@@ -71,8 +70,7 @@ func main() {
 	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)
 	apiLinkHandler := api.NewLinkHandler(linkService, cfg.BaseURL)
 
-	repoHealth := repository.NewHealthRepository(dbConn)
-	healthService := service.NewHealthService(repoHealth)
+	healthService := service.NewHealthService(dbConn)
 	healthHandler := health.NewHealthHandler(healthService)
 
 	router.RegisterHealthRouters(rt, healthHandler)

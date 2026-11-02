@@ -31,23 +31,43 @@ func (r *InMemoryRepository) Save(ctx context.Context, link *model.Link) error {
 	return nil
 }
 
-func (r *InMemoryRepository) FindByCode(ctx context.Context, code string) (*model.Link, bool) {
+func (r *InMemoryRepository) FindByCode(ctx context.Context, code string) (*model.Link, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	link, ok := r.links[code]
-	return link, ok
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return link, nil
 }
 
-func (r *InMemoryRepository) FindByOriginalURL(ctx context.Context, originalURL string) (*model.Link, bool) {
+func (r *InMemoryRepository) FindByOriginalURL(ctx context.Context, originalURL string) (*model.Link, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	code, ok := r.codesByURL[originalURL]
 	if !ok {
-		return nil, false
+		return nil, ErrNotFound
 	}
 
 	link, ok := r.links[code]
-	return link, ok
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return link, nil
+}
+
+func (r *InMemoryRepository) SaveBatch(ctx context.Context, links []*model.Link) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, link := range links {
+		r.links[link.Code] = link
+		r.codesByURL[link.OriginalURL] = link.Code
+	}
+
+	return nil
 }

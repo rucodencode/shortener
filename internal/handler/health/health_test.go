@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rucodencode/shortener/internal/handler/health"
 	"github.com/rucodencode/shortener/internal/mock"
-	"github.com/rucodencode/shortener/internal/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,12 +16,10 @@ func TestHealthHandler_PingDB_Healthy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := mock.NewMockHealthRepository(ctrl)
-	mockRepo.EXPECT().Ping(gomock.Any()).Return(nil).Times(1)
+	mockService := mock.NewMockHealthService(ctrl)
+	mockService.EXPECT().PingDB(gomock.Any()).Return(nil).Times(1)
 
-	svc := service.NewHealthService(mockRepo)
-
-	handler := health.NewHealthHandler(svc)
+	handler := health.NewHealthHandler(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
 	recorder := httptest.NewRecorder()
@@ -36,12 +33,10 @@ func TestHealthHandler_PingDB_Unhealthy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := mock.NewMockHealthRepository(ctrl)
-	mockRepo.EXPECT().Ping(gomock.Any()).Return(errors.New("database connection failed")).Times(1)
+	mockService := mock.NewMockHealthService(ctrl)
+	mockService.EXPECT().PingDB(gomock.Any()).Return(errors.New("database connection failed")).Times(1)
 
-	svc := service.NewHealthService(mockRepo)
-
-	handler := health.NewHealthHandler(svc)
+	handler := health.NewHealthHandler(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
 	recorder := httptest.NewRecorder()

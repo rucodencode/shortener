@@ -57,25 +57,54 @@ func (r *FileRepository) Save(ctx context.Context, link *model.Link) error {
 	return nil
 }
 
-func (r *FileRepository) FindByCode(ctx context.Context, code string) (*model.Link, bool) {
+func (r *FileRepository) FindByCode(ctx context.Context, code string) (*model.Link, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	link, ok := r.links[code]
-	return link, ok
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return link, nil
 }
 
-func (r *FileRepository) FindByOriginalURL(ctx context.Context, originalURL string) (*model.Link, bool) {
+func (r *FileRepository) FindByOriginalURL(ctx context.Context, originalURL string) (*model.Link, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	code, ok := r.codesByURL[originalURL]
 	if !ok {
-		return nil, false
+		return nil, ErrNotFound
 	}
 
 	link, ok := r.links[code]
-	return link, ok
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return link, nil
+}
+
+func (r *FileRepository) SaveBatch(ctx context.Context, links []*model.Link) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, link := range links {
+		r.links[link.Code] = link
+		r.codesByURL[link.OriginalURL] = link.Code
+	}
+
+	if err := r.persistToDisk(); err != nil {
+		for _, link := range links {
+			delete(r.links, link.Code)
+			delete(r.codesByURL, link.OriginalURL)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (r *FileRepository) persistToDisk() error {
