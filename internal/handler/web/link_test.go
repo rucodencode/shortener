@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -26,8 +27,14 @@ func withURLParam(r *http.Request, key string, value string) *http.Request {
 	return r.WithContext(ctx)
 }
 
-func newTestHandler() *LinkHandler {
-	repo := repository.NewLinkRepository()
+func newTestHandler(t *testing.T) *LinkHandler {
+	storagePath := filepath.Join(t.TempDir(), "storage.json")
+
+	repo, err := repository.NewLinkRepository(storagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	linkService := service.NewLinkService(repo)
 	return NewLinkHandler(linkService, baseURL)
 }
@@ -96,7 +103,7 @@ func TestLinkHandler_Create(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			linkHandler := newTestHandler()
+			linkHandler := newTestHandler(t)
 
 			request, err := http.NewRequest(http.MethodPost, `/`, strings.NewReader(test.request.body))
 
@@ -128,7 +135,7 @@ func TestLinkHandler_Create(t *testing.T) {
 }
 
 func TestLinkHandler_CreateSameURL(t *testing.T) {
-	linkHandler := newTestHandler()
+	linkHandler := newTestHandler(t)
 
 	firstRequest := httptest.NewRequest(
 		http.MethodPost,
@@ -165,7 +172,7 @@ func TestLinkHandler_CreateSameURL(t *testing.T) {
 }
 
 func TestLinkHandler_Get(t *testing.T) {
-	linkHandler := newTestHandler()
+	linkHandler := newTestHandler(t)
 	originalURL := "https://practicum.yandex.ru/"
 
 	firstRequest := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(originalURL))
@@ -197,7 +204,7 @@ func TestLinkHandler_Get(t *testing.T) {
 }
 
 func TestLinkHandler_GetUnknownCode(t *testing.T) {
-	linkHandler := newTestHandler()
+	linkHandler := newTestHandler(t)
 	code := "unknown"
 	request := httptest.NewRequest(http.MethodGet, "/"+code, nil)
 	request = withURLParam(request, "code", code)

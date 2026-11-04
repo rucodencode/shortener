@@ -21,7 +21,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	repo := repository.NewLinkRepository()
+	repo, err := repository.NewLinkRepository(cfg.FileStoragePath)
+	if err != nil {
+		log.Fatal("Rep didn't loaded")
+	}
+
 	linkService := service.NewLinkService(repo)
 	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)
 	apiLinkHandler := api.NewLinkHandler(linkService, cfg.BaseURL)

@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,8 +16,14 @@ import (
 
 const baseURL = "http://localhost:8080"
 
-func newTestHandler() *LinkHandler {
-	repo := repository.NewLinkRepository()
+func newTestHandler(t *testing.T) *LinkHandler {
+	storagePath := filepath.Join(t.TempDir(), "storage.json")
+
+	repo, err := repository.NewLinkRepository(storagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	linkService := service.NewLinkService(repo)
 
 	return NewLinkHandler(linkService, baseURL)
@@ -127,7 +134,7 @@ func TestLinkHandler_Create(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			linkHandler := newTestHandler()
+			linkHandler := newTestHandler(t)
 
 			request, err := http.NewRequest(
 				http.MethodPost,
@@ -161,7 +168,7 @@ func TestLinkHandler_Create(t *testing.T) {
 }
 
 func TestLinkHandler_CreateSameURL(t *testing.T) {
-	linkHandler := newTestHandler()
+	linkHandler := newTestHandler(t)
 
 	firstRequest := httptest.NewRequest(
 		http.MethodPost,

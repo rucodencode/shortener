@@ -3,19 +3,21 @@ package middleware
 import (
 	"compress/gzip"
 	"io"
+	"mime"
 	"net/http"
+	"slices"
 	"strings"
 )
 
 type compressWriter struct {
-	w  http.ResponseWriter
-	zw *gzip.Writer
+	w           http.ResponseWriter
+	zw          *gzip.Writer
+	wroteHeader bool
 }
 
 func newCompressWriter(w http.ResponseWriter) *compressWriter {
 	return &compressWriter{
-		w:  w,
-		zw: gzip.NewWriter(w),
+		w: w,
 	}
 }
 
@@ -24,17 +26,55 @@ func (c *compressWriter) Header() http.Header {
 }
 
 func (c *compressWriter) Write(p []byte) (int, error) {
-	return c.zw.Write(p)
+	if !c.wroteHeader {
+		if c.Header().Get("Content-Type") == "" {
+			c.Header().Set("Content-Type", http.DetectContentType(p))
+		}
+
+		c.WriteHeader(http.StatusOK)
+	}
+
+	if c.zw != nil {
+		return c.zw.Write(p)
+	}
+
+	return c.w.Write(p)
 }
 
 func (c *compressWriter) WriteHeader(statusCode int) {
-	c.w.Header().Set("Content-Encoding", "gzip")
+	if c.wroteHeader {
+		return
+	}
+
+	c.wroteHeader = true
+
+	needContentTypes := []string{"application/json", "text/html"}
+	noNeedStatusCodes := []int{http.StatusNoContent, http.StatusNotModified}
+
+	contentType, _, err := mime.ParseMediaType(
+		c.Header().Get("Content-Type"),
+	)
+
+	shouldCompress := err == nil &&
+		slices.Contains(needContentTypes, contentType) &&
+		c.Header().Get("Content-Encoding") == "" &&
+		!slices.Contains(noNeedStatusCodes, statusCode)
+
+	if shouldCompress {
+		c.Header().Set("Content-Encoding", "gzip")
+		c.Header().Del("Content-Length")
+		c.zw = gzip.NewWriter(c.w)
+	}
 
 	c.w.WriteHeader(statusCode)
 }
 
 func (c *compressWriter) Close() error {
-	return c.zw.Close()
+	if c.zw != nil {
+		return c.zw.Close()
+	}
+
+	return nil
 }
 
 type compressReader struct {

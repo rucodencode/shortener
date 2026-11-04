@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/rucodencode/shortener/internal/logger"
+	"github.com/rucodencode/shortener/internal/model"
 	"github.com/rucodencode/shortener/internal/service"
 	"go.uber.org/zap"
 )
@@ -18,14 +19,18 @@ type CreateLinkResponse struct {
 	Result string `json:"result"`
 }
 
+type LinkService interface {
+	Create(originalURL string) (model.Link, error)
+}
+
 type LinkHandler struct {
-	service *service.LinkService
+	service LinkService
 	baseURL string
 }
 
-func NewLinkHandler(service *service.LinkService, baseURL string) *LinkHandler {
+func NewLinkHandler(src LinkService, baseURL string) *LinkHandler {
 	return &LinkHandler{
-		service: service,
+		service: src,
 		baseURL: baseURL,
 	}
 }
@@ -49,8 +54,7 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	link, err := h.service.Create(req.URL)
 
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidURL) ||
-			errors.Is(err, service.ErrCodeCollision) {
+		if errors.Is(err, service.ErrInvalidURL) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
