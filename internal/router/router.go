@@ -4,23 +4,24 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rucodencode/shortener/internal/handler"
+	"github.com/rucodencode/shortener/internal/handler/api"
+	"github.com/rucodencode/shortener/internal/handler/web"
+	"github.com/rucodencode/shortener/internal/logger"
 )
 
-func NewRouter(linkHandler *handler.LinkHandler) http.Handler {
-	router := chi.NewRouter()
+func NewRouter(webHandler *web.LinkHandler, apiHandler *api.LinkHandler) *chi.Mux {
+	r := chi.NewRouter()
+	r.Use(logger.RequestLogger)
+	RegisterWebRouters(r, webHandler)
+	RegisterAPIRouters(r, apiHandler)
 
-	router.Post("/", linkHandler.Create)
-
-	router.Get("/{code}", linkHandler.Get)
-
-	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 	})
 
-	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 	})
 
-	return router
+	return r
 }
