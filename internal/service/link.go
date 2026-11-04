@@ -7,14 +7,25 @@ import (
 	"net/url"
 
 	"github.com/rucodencode/shortener/internal/model"
-	"github.com/rucodencode/shortener/internal/repository"
 )
 
-type LinkService struct {
-	repo *repository.LinkRepository
+var (
+	ErrCodeCollision = errors.New("code collision")
+	ErrNotFound      = errors.New("not found")
+	ErrInvalidURL    = errors.New("invalid url")
+)
+
+type LinkRepository interface {
+	Save(link model.Link)
+	FindByCode(code string) (model.Link, bool)
+	FindByOriginalURL(originalURL string) (model.Link, bool)
 }
 
-func NewLinkService(repo *repository.LinkRepository) *LinkService {
+type LinkService struct {
+	repo LinkRepository
+}
+
+func NewLinkService(repo LinkRepository) *LinkService {
 	return &LinkService{
 		repo: repo,
 	}
@@ -33,7 +44,7 @@ func (s *LinkService) Create(originalURL string) (model.Link, error) {
 	code := generateCode(originalURL)
 	_, found = s.repo.FindByCode(code)
 	if found {
-		return model.Link{}, errors.New("code collision")
+		return model.Link{}, ErrCodeCollision
 	}
 
 	link = model.Link{Code: code, OriginalURL: originalURL}
@@ -48,21 +59,21 @@ func (s *LinkService) GetByCode(code string) (model.Link, error) {
 		return link, nil
 	}
 
-	return model.Link{}, errors.New("not found")
+	return model.Link{}, ErrNotFound
 }
 
 func validateURL(rawURL string) error {
 	u, err := url.ParseRequestURI(rawURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrInvalidURL, err)
 	}
 
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return errors.New("unsupported URL scheme")
+		return fmt.Errorf("%w: %s", ErrInvalidURL, errors.New("unsupported URL scheme"))
 	}
 
 	if u.Host == "" {
-		return errors.New("URL must contain host")
+		return fmt.Errorf("%w: %s", ErrInvalidURL, errors.New("URL must contain host"))
 	}
 
 	return nil

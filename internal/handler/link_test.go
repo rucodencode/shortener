@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/rucodencode/shortener/internal/repository"
 	"github.com/rucodencode/shortener/internal/service"
 	"github.com/stretchr/testify/assert"
@@ -15,8 +17,16 @@ import (
 
 const baseURL = "http://localhost:8080"
 
-func newTestHandler() *LinkHandler {
+func withURLParam(r *http.Request, key string, value string) *http.Request {
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add(key, value)
 
+	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, routeContext)
+
+	return r.WithContext(ctx)
+}
+
+func newTestHandler() *LinkHandler {
 	repo := repository.NewLinkRepository()
 	linkService := service.NewLinkService(repo)
 	return NewLinkHandler(linkService, baseURL)
@@ -173,6 +183,7 @@ func TestLinkHandler_Get(t *testing.T) {
 	code := strings.TrimPrefix(string(firstBody), baseURL+"/")
 
 	secondRequest := httptest.NewRequest(http.MethodGet, "/"+code, nil)
+	secondRequest = withURLParam(secondRequest, "code", code)
 	secondRequest.Header.Set("Content-Type", "text/plain")
 
 	secondRecorder := httptest.NewRecorder()
@@ -189,6 +200,7 @@ func TestLinkHandler_GetUnknownCode(t *testing.T) {
 	linkHandler := newTestHandler()
 	code := "unknown"
 	request := httptest.NewRequest(http.MethodGet, "/"+code, nil)
+	request = withURLParam(request, "code", code)
 	recorder := httptest.NewRecorder()
 	linkHandler.Get(recorder, request)
 
