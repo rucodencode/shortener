@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/md5"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/rucodencode/shortener/internal/model"
+	"github.com/rucodencode/shortener/internal/repository/link"
 )
 
 var (
@@ -16,32 +18,26 @@ var (
 	ErrInvalidURL     = errors.New("invalid url")
 )
 
-type LinkRepository interface {
-	Save(link model.Link) error
-	FindByCode(code string) (model.Link, bool)
-	FindByOriginalURL(originalURL string) (model.Link, bool)
-}
-
 type LinkService struct {
 	mu   sync.Mutex
-	repo LinkRepository
+	repo link.LinkRepository
 }
 
-func NewLinkService(repo LinkRepository) *LinkService {
+func NewLinkService(repo link.LinkRepository) *LinkService {
 	return &LinkService{
 		repo: repo,
 	}
 }
 
-func (s *LinkService) Create(originalURL string) (model.Link, error) {
+func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Link, error) {
 	if err := validateURL(originalURL); err != nil {
-		return model.Link{}, err
+		return nil, err
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	link, found := s.repo.FindByOriginalURL(originalURL)
+	link, found := s.repo.FindByOriginalURL(ctx, originalURL)
 	if found {
 		return link, nil
 	}
@@ -57,7 +53,7 @@ func (s *LinkService) Create(originalURL string) (model.Link, error) {
 
 		code := generateCode(source)
 
-		existing, found := s.repo.FindByCode(code)
+		existing, found := s.repo.FindByCode(ctx, code)
 		if found {
 			if existing.OriginalURL == originalURL {
 				return existing, nil
@@ -66,28 +62,28 @@ func (s *LinkService) Create(originalURL string) (model.Link, error) {
 			continue
 		}
 
-		link := model.Link{
+		link := &model.Link{
 			Code:        code,
 			OriginalURL: originalURL,
 		}
 
-		if err := s.repo.Save(link); err != nil {
-			return model.Link{}, err
+		if err := s.repo.Save(ctx, link); err != nil {
+			return nil, err
 		}
 
 		return link, nil
 	}
 
-	return model.Link{}, ErrCodeGeneration
+	return nil, ErrCodeGeneration
 }
 
-func (s *LinkService) GetByCode(code string) (model.Link, error) {
-	link, found := s.repo.FindByCode(code)
+func (s *LinkService) GetByCode(ctx context.Context, code string) (*model.Link, error) {
+	link, found := s.repo.FindByCode(ctx, code)
 	if found {
 		return link, nil
 	}
 
-	return model.Link{}, ErrNotFound
+	return nil, ErrNotFound
 }
 
 func validateURL(rawURL string) error {

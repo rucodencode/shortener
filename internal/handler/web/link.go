@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -11,8 +12,8 @@ import (
 )
 
 type LinkService interface {
-	Create(originalURL string) (model.Link, error)
-	GetByCode(code string) (model.Link, error)
+	Create(ctx context.Context, originalURL string) (*model.Link, error)
+	GetByCode(ctx context.Context, code string) (*model.Link, error)
 }
 
 type LinkHandler struct {
@@ -35,7 +36,7 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	originalURL := string(body)
-	link, err := h.service.Create(originalURL)
+	link, err := h.service.Create(r.Context(), originalURL)
 
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidURL) {
@@ -59,7 +60,7 @@ func (h *LinkHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.service.GetByCode(code)
+	link, err := h.service.GetByCode(r.Context(), code)
 
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
