@@ -10,6 +10,9 @@ type Config struct {
 	BaseURL         string
 	LogLevel        string
 	FileStoragePath string
+	DB              struct {
+		DataSourceName string
+	}
 }
 
 func NewConfig() Config {
@@ -18,6 +21,7 @@ func NewConfig() Config {
 	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "base url")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "log level")
 	flag.StringVar(&cfg.FileStoragePath, "f", "storage.json", "file storage path")
+	flag.StringVar(&cfg.DB.DataSourceName, "d", "host=localhost port=5432 user=app_user password=app_password dbname=app_db sslmode=disable", "DB data source name")
 	flag.Parse()
 
 	if envServerAddress := os.Getenv("SERVER_ADDRESS"); envServerAddress != "" {
@@ -34,6 +38,10 @@ func NewConfig() Config {
 
 	if envFileStoragePath := os.Getenv("FILE_STORAGE_PATH"); envFileStoragePath != "" {
 		cfg.FileStoragePath = envFileStoragePath
+	}
+
+	if envDBDataSourceName := os.Getenv("DATABASE_DSN"); envDBDataSourceName != "" {
+		cfg.DB.DataSourceName = envDBDataSourceName
 	}
 
 	return cfg
