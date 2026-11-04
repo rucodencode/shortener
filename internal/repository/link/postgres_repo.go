@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/rucodencode/shortener/internal/model"
 )
@@ -30,31 +31,37 @@ func (r *PostgresRepository) Save(ctx context.Context, link *model.Link) error {
 }
 
 func (r *PostgresRepository) SaveBatch(ctx context.Context, links []*model.Link) error {
+	if len(links) == 0 {
+		return nil
+	}
+
+	placeholders := make([]string, 0, len(links))
+	args := make([]any, 0, len(links)*2)
+
+	for i, link := range links {
+		firstParam := i*2 + 1
+		placeholders = append(
+			placeholders,
+			fmt.Sprintf("($%d, $%d)", firstParam, firstParam+1),
+		)
+
+		args = append(args, link.Code, link.OriginalURL)
+	}
+
+	sqlText := "INSERT INTO links(code, original_url) VALUES " +
+		strings.Join(placeholders, ", ")
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin batch transaction: %w", err)
 	}
-
 	defer tx.Rollback()
 
-	sqlText := "INSERT INTO links(code, original_url) VALUES($1, $2)"
-	stmt, err := tx.PrepareContext(ctx, sqlText)
-	if err != nil {
-		return fmt.Errorf("prepare batch insert: %w", err)
+	if _, err := tx.ExecContext(ctx, sqlText, args...); err != nil {
+		return fmt.Errorf("save batch links: %w", err)
 	}
 
-	defer stmt.Close()
-
-	for _, link := range links {
-		_, err := stmt.ExecContext(ctx, link.Code, link.OriginalURL)
-		if err != nil {
-			return fmt.Errorf("insert batch item: %w", err)
-		}
-
-	}
-
-	err = tx.Commit()
-	if err != nil {
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit batch transaction: %w", err)
 	}
 

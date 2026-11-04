@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"database/sql"
-	"errors"
 )
 
 type HealthService struct {
@@ -18,7 +17,7 @@ func NewHealthService(db *sql.DB) *HealthService {
 
 func (s *HealthService) PingDB(ctx context.Context) error {
 	if s.db == nil {
-		return errors.New("database is not configured")
+		return nil
 	}
 
 	return s.db.PingContext(ctx)
