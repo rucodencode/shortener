@@ -1,12 +1,32 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/rucodencode/shortener/internal/handler"
 	"github.com/rucodencode/shortener/internal/repository"
 	"github.com/rucodencode/shortener/internal/service"
 )
+
+func NewRouter(linkHandler *handler.LinkHandler) http.Handler {
+	router := chi.NewRouter()
+
+	router.Post("/", linkHandler.Create)
+
+	router.Get("/{code}", linkHandler.Get)
+
+	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+	})
+
+	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+	})
+
+	return router
+}
 
 func main() {
 	addr := ":8080"
@@ -16,30 +36,7 @@ func main() {
 	linkService := service.NewLinkService(repo)
 	linkHandler := handler.NewLinkHandler(linkService, baseURL)
 
-	mux := http.NewServeMux()
+	router := NewRouter(linkHandler)
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			if r.Method != http.MethodPost {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-
-			linkHandler.Create(w, r)
-			return
-		}
-
-		if r.Method != http.MethodGet {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-
-		linkHandler.Get(w, r)
-	})
-
-	err := http.ListenAndServe(addr, mux)
-
-	if err != nil {
-		panic(err)
-	}
+	log.Fatal(http.ListenAndServe(addr, router))
 }
