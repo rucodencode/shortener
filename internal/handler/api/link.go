@@ -120,14 +120,15 @@ func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 
 	links, err := h.service.CreateBatch(r.Context(), originalURLs)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidURL) || errors.Is(err, service.ErrAlreadyExists) {
+		switch {
+		case errors.Is(err, service.ErrInvalidURL):
 			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		case errors.Is(err, service.ErrAlreadyExists):
+			http.Error(w, "duplicate original URL", http.StatusConflict)
+		default:
+			logger.Log.Error("failed to create batch links", zap.Error(err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
-
-		logger.Log.Error("failed to create batch links", zap.Error(err))
-
-		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 

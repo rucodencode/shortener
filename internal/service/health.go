@@ -2,23 +2,24 @@ package service
 
 import (
 	"context"
-	"database/sql"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type HealthService struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-func NewHealthService(db *sql.DB) *HealthService {
+func NewHealthService(pool *pgxpool.Pool) *HealthService {
 	return &HealthService{
-		db: db,
+		pool: pool,
 	}
 }
 
 func (s *HealthService) PingDB(ctx context.Context) error {
-	if s.db == nil {
+	if s.pool == nil {
 		return nil
 	}
 
-	return s.db.PingContext(ctx)
+	return s.pool.Ping(ctx)
 }

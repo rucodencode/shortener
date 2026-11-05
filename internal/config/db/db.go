@@ -2,14 +2,14 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/rucodencode/shortener/migrations"
 )
 
@@ -17,28 +17,30 @@ type Config struct {
 	DataSource string
 }
 
-func NewDB(cfg Config) (*sql.DB, error) {
-	dbConn, err := sql.Open("pgx", cfg.DataSource)
+func NewDB(cfg Config) (*pgxpool.Pool, error) {
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, cfg.DataSource)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	ctx := context.Background()
-
-	if err := dbConn.PingContext(ctx); err != nil {
-		dbConn.Close()
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	if err := applyMigrations(ctx, dbConn); err != nil {
-		dbConn.Close()
+	if err := applyMigrations(ctx, pool); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("initialize database: %w", err)
 	}
 
-	return dbConn, nil
+	return pool, nil
 }
 
-func applyMigrations(ctx context.Context, dbConn *sql.DB) error {
+func applyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
+	dbConn := stdlib.OpenDBFromPool(pool)
+	defer dbConn.Close()
+
 	sourceDriver, err := iofs.New(migrations.Files, ".")
 	if err != nil {
 		return fmt.Errorf("create migrations source: %w", err)

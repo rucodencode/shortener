@@ -1,15 +1,14 @@
 package link
 
 import (
-	"database/sql"
-
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rucodencode/shortener/internal/config"
 )
 
-func NewLinkRepository(cfg config.Config, db *sql.DB) (LinkRepository, error) {
+func NewLinkRepository(cfg config.Config, pool *pgxpool.Pool) (LinkRepository, error) {
 	switch cfg.RepoType {
 	case config.RepoTypePostgres:
-		return NewPostgresRepository(db)
+		return NewPostgresRepository(pool)
 	case config.RepoTypeFile:
 		return NewFileRepository(cfg.FileStoragePath)
 	case config.RepoTypeMemory:

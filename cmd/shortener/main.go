@@ -1,10 +1,10 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rucodencode/shortener/internal/config"
 	"github.com/rucodencode/shortener/internal/config/db"
 	"github.com/rucodencode/shortener/internal/handler/api"
@@ -24,17 +24,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var dbConn *sql.DB
+	var pool *pgxpool.Pool
 	var err error
 
 	if cfg.RepoType == config.RepoTypePostgres {
-		dbConn, err = db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
+		pool, err = db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
 		if err != nil {
 			logger.Log.Fatal("failed to initialize database", zap.Error(err))
 		}
 	}
 
-	repo, err := link.NewLinkRepository(cfg, dbConn)
+	repo, err := link.NewLinkRepository(cfg, pool)
 	if err != nil {
 		logger.Log.Fatal("repository initialization failed", zap.Error(err))
 	}
@@ -45,7 +45,7 @@ func main() {
 	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)
 	apiLinkHandler := api.NewLinkHandler(linkService, cfg.BaseURL)
 
-	healthService := service.NewHealthService(dbConn)
+	healthService := service.NewHealthService(pool)
 	healthHandler := health.NewHealthHandler(healthService)
 
 	router.RegisterHealthRouters(rt, healthHandler)

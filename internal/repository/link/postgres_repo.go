@@ -2,29 +2,52 @@ package link
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rucodencode/shortener/internal/model"
 )
 
+var ErrOriginalURLConflict = errors.New("original URL already exists")
+
 type PostgresRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-func NewPostgresRepository(db *sql.DB) (LinkRepository, error) {
+func NewPostgresRepository(pool *pgxpool.Pool) (LinkRepository, error) {
 	return &PostgresRepository{
-		db: db,
+		pool: pool,
 	}, nil
+}
+
+func isUniqueViolationOn(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == pgerrcode.UniqueViolation &&
+		pgErr.ConstraintName == constraint
+}
+
+func classifyWriteError(err error) error {
+	if isUniqueViolationOn(err, "links_original_url_key") {
+		return fmt.Errorf("%w: %w", ErrOriginalURLConflict, err)
+	}
+	return err
+}
+
+func IsCodeConflict(err error) bool {
+	return isUniqueViolationOn(err, "links_code_key")
 }
 
 func (r *PostgresRepository) Save(ctx context.Context, link *model.Link) error {
 	sqlText := "INSERT INTO links(code, original_url) VALUES($1, $2)"
-	_, err := r.db.ExecContext(ctx, sqlText, link.Code, link.OriginalURL)
+	_, err := r.pool.Exec(ctx, sqlText, link.Code, link.OriginalURL)
 	if err != nil {
-		return fmt.Errorf("save link: %w", err)
+		return fmt.Errorf("save link: %w", classifyWriteError(err))
 	}
 
 	return nil
@@ -51,18 +74,18 @@ func (r *PostgresRepository) SaveBatch(ctx context.Context, links []*model.Link)
 	sqlText := "INSERT INTO links(code, original_url) VALUES " +
 		strings.Join(placeholders, ", ")
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin batch transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 
-	if _, err := tx.ExecContext(ctx, sqlText, args...); err != nil {
-		return fmt.Errorf("save batch links: %w", err)
+	if _, err := tx.Exec(ctx, sqlText, args...); err != nil {
+		return fmt.Errorf("save batch links: %w", classifyWriteError(err))
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit batch transaction: %w", err)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit batch transaction: %w", classifyWriteError(err))
 	}
 
 	return nil
@@ -72,11 +95,11 @@ func (r *PostgresRepository) FindByCode(ctx context.Context, code string) (*mode
 	link := &model.Link{}
 
 	sqlText := "SELECT code, original_url FROM links WHERE code = $1"
-	row := r.db.QueryRowContext(ctx, sqlText, code)
+	row := r.pool.QueryRow(ctx, sqlText, code)
 
 	err := row.Scan(&link.Code, &link.OriginalURL)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 
@@ -90,10 +113,10 @@ func (r *PostgresRepository) FindByOriginalURL(ctx context.Context, originalURL 
 	link := &model.Link{}
 
 	sqlText := "SELECT code, original_url FROM links WHERE original_url = $1"
-	row := r.db.QueryRowContext(ctx, sqlText, originalURL)
+	row := r.pool.QueryRow(ctx, sqlText, originalURL)
 	err := row.Scan(&link.Code, &link.OriginalURL)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 
