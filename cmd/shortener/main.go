@@ -1,19 +1,20 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rucodencode/shortener/internal/config"
 	"github.com/rucodencode/shortener/internal/config/db"
 	"github.com/rucodencode/shortener/internal/handler/api"
 	"github.com/rucodencode/shortener/internal/handler/health"
 	"github.com/rucodencode/shortener/internal/handler/web"
 	"github.com/rucodencode/shortener/internal/logger"
-	"github.com/rucodencode/shortener/internal/repository"
+	"github.com/rucodencode/shortener/internal/repository/link"
 	"github.com/rucodencode/shortener/internal/router"
 	"github.com/rucodencode/shortener/internal/service"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -23,16 +24,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
-	if err != nil {
-		log.Fatalf("Database connection failed: %v", err)
+	var pool *pgxpool.Pool
+	var err error
+
+	if cfg.RepoType == config.RepoTypePostgres {
+		pool, err = db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
+		if err != nil {
+			logger.Log.Fatal("failed to initialize database", zap.Error(err))
+		}
 	}
 
-	defer db.Close()
-
-	repo, err := repository.NewLinkRepository(cfg.FileStoragePath)
+	repo, err := link.NewLinkRepository(cfg, pool)
 	if err != nil {
-		log.Fatal("Rep didn't loaded")
+		logger.Log.Fatal("repository initialization failed", zap.Error(err))
 	}
 
 	rt := router.NewRouter()
@@ -41,14 +45,15 @@ func main() {
 	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)
 	apiLinkHandler := api.NewLinkHandler(linkService, cfg.BaseURL)
 
-	repoHealth := repository.NewHealthRepository(db)
-	healthService := service.NewHealthService(repoHealth)
+	healthService := service.NewHealthService(pool)
 	healthHandler := health.NewHealthHandler(healthService)
 
 	router.RegisterHealthRouters(rt, healthHandler)
 	router.RegisterAPIRouters(rt, apiLinkHandler)
 	router.RegisterWebRouters(rt, webLinkHandler)
 
-	fmt.Println("Running server on", cfg.ServerAddress)
-	log.Fatal(http.ListenAndServe(cfg.ServerAddress, rt))
+	logger.Log.Info("starting HTTP server", zap.String("address", cfg.ServerAddress))
+	if err := http.ListenAndServe(cfg.ServerAddress, rt); err != nil {
+		logger.Log.Fatal("HTTP server failed", zap.Error(err))
+	}
 }

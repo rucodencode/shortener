@@ -1,21 +1,25 @@
 package service
 
-import "context"
+import (
+	"context"
 
-type HealthRepository interface {
-	Ping(ctx context.Context) error
-}
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
 type HealthService struct {
-	repo HealthRepository
+	pool *pgxpool.Pool
 }
 
-func NewHealthService(repo HealthRepository) *HealthService {
+func NewHealthService(pool *pgxpool.Pool) *HealthService {
 	return &HealthService{
-		repo: repo,
+		pool: pool,
 	}
 }
 
 func (s *HealthService) PingDB(ctx context.Context) error {
-	return s.repo.Ping(ctx)
+	if s.pool == nil {
+		return nil
+	}
+
+	return s.pool.Ping(ctx)
 }

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rucodencode/shortener/internal/repository"
+	"github.com/rucodencode/shortener/internal/repository/link"
 	"github.com/rucodencode/shortener/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +30,7 @@ func withURLParam(r *http.Request, key string, value string) *http.Request {
 func newTestHandler(t *testing.T) *LinkHandler {
 	storagePath := filepath.Join(t.TempDir(), "storage.json")
 
-	repo, err := repository.NewLinkRepository(storagePath)
+	repo, err := link.NewFileRepository(storagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestLinkHandler_CreateSameURL(t *testing.T) {
 	secondBody, err := io.ReadAll(secondResponse.Body)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, firstResponse.StatusCode)
-	assert.Equal(t, http.StatusCreated, secondResponse.StatusCode)
+	assert.Equal(t, http.StatusConflict, secondResponse.StatusCode)
 	assert.Equal(t, string(firstBody), string(secondBody))
 }
 
