@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -20,7 +21,7 @@ type CreateLinkResponse struct {
 }
 
 type LinkService interface {
-	Create(originalURL string) (model.Link, error)
+	Create(ctx context.Context, originalURL string) (*model.Link, error)
 }
 
 type LinkHandler struct {
@@ -51,7 +52,7 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.service.Create(req.URL)
+	link, err := h.service.Create(r.Context(), req.URL)
 
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidURL) {
