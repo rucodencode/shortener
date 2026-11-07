@@ -44,6 +44,13 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if errors.Is(err, service.ErrAlreadyExists) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(h.baseURL + "/" + link.Code))
+			return
+		}
+
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

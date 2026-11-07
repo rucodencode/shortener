@@ -1,11 +1,10 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rucodencode/shortener/internal/config"
 	"github.com/rucodencode/shortener/internal/config/db"
 	"github.com/rucodencode/shortener/internal/handler/api"
@@ -15,11 +14,7 @@ import (
 	"github.com/rucodencode/shortener/internal/repository/link"
 	"github.com/rucodencode/shortener/internal/router"
 	"github.com/rucodencode/shortener/internal/service"
-
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/lib/pq"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -29,39 +24,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var dbConn *sql.DB
+	var pool *pgxpool.Pool
 	var err error
 
 	if cfg.RepoType == config.RepoTypePostgres {
-		dbConn, err = db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
+		pool, err = db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
 		if err != nil {
-			log.Fatalf("failed to open DB conntection: %v", err)
+			logger.Log.Fatal("failed to initialize database", zap.Error(err))
 		}
-
-		if err = dbConn.Ping(); err != nil {
-			log.Fatalf("DB ping failed: %v", err)
-		}
-
-		driver, err := postgres.WithInstance(dbConn, &postgres.Config{})
-		if err != nil {
-			log.Fatalf("failed to create migrate driver: %v", err)
-		}
-
-		migrationPath := "file://./migrations"
-
-		m, err := migrate.NewWithDatabaseInstance(migrationPath, "postgres", driver)
-		if err != nil {
-			log.Fatalf("failed to create migrate instance: %v", err)
-		}
-		defer m.Close()
-		m.Up()
-
-		log.Println("Migrations applied successfully")
 	}
 
-	repo, err := link.NewLinkRepository(cfg, dbConn)
+	repo, err := link.NewLinkRepository(cfg, pool)
 	if err != nil {
-		log.Fatalf("repository initialization failed: %v", err)
+		logger.Log.Fatal("repository initialization failed", zap.Error(err))
 	}
 
 	rt := router.NewRouter()
@@ -70,13 +45,15 @@ func main() {
 	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)
 	apiLinkHandler := api.NewLinkHandler(linkService, cfg.BaseURL)
 
-	healthService := service.NewHealthService(dbConn)
+	healthService := service.NewHealthService(pool)
 	healthHandler := health.NewHealthHandler(healthService)
 
 	router.RegisterHealthRouters(rt, healthHandler)
 	router.RegisterAPIRouters(rt, apiLinkHandler)
 	router.RegisterWebRouters(rt, webLinkHandler)
 
-	fmt.Println("Running server on", cfg.ServerAddress)
-	log.Fatal(http.ListenAndServe(cfg.ServerAddress, rt))
+	logger.Log.Info("starting HTTP server", zap.String("address", cfg.ServerAddress))
+	if err := http.ListenAndServe(cfg.ServerAddress, rt); err != nil {
+		logger.Log.Fatal("HTTP server failed", zap.Error(err))
+	}
 }

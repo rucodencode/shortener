@@ -167,7 +167,7 @@ func TestLinkHandler_CreateSameURL(t *testing.T) {
 	secondBody, err := io.ReadAll(secondResponse.Body)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, firstResponse.StatusCode)
-	assert.Equal(t, http.StatusCreated, secondResponse.StatusCode)
+	assert.Equal(t, http.StatusConflict, secondResponse.StatusCode)
 	assert.Equal(t, string(firstBody), string(secondBody))
 }
 
