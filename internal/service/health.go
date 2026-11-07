@@ -1,21 +1,25 @@
 package service
 
-import "context"
-
-type HealthRepository interface {
-	Ping(ctx context.Context) error
-}
+import (
+	"context"
+	"database/sql"
+	"errors"
+)
 
 type HealthService struct {
-	repo HealthRepository
+	db *sql.DB
 }
 
-func NewHealthService(repo HealthRepository) *HealthService {
+func NewHealthService(db *sql.DB) *HealthService {
 	return &HealthService{
-		repo: repo,
+		db: db,
 	}
 }
 
 func (s *HealthService) PingDB(ctx context.Context) error {
-	return s.repo.Ping(ctx)
+	if s.db == nil {
+		return errors.New("database is not configured")
+	}
+
+	return s.db.PingContext(ctx)
 }
