@@ -60,11 +60,11 @@ func (m *JWTManager) Parse(tokenString string) (string, error) {
 		},
 	)
 	if err != nil {
-		return "", fmt.Errorf("Token parse: %v", err)
+		return "", fmt.Errorf("token parse: %v", err)
 	}
 
 	if !token.Valid {
-		return "", fmt.Errorf("Token is not valid")
+		return "", fmt.Errorf("token is not valid")
 	}
 
 	return claims.UserID, nil
