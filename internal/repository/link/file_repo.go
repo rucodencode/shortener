@@ -107,6 +107,20 @@ func (r *FileRepository) SaveBatch(ctx context.Context, links []*model.Link) err
 	return nil
 }
 
+func (r *FileRepository) FindByUserID(ctx context.Context, userID string) ([]*model.Link, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var links []*model.Link
+	for _, link := range r.links {
+		if link.UserID == userID {
+			links = append(links, link)
+		}
+	}
+
+	return links, nil
+}
+
 func (r *FileRepository) persistToDisk() error {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {

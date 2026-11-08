@@ -30,7 +30,7 @@ func NewLinkService(repo linkrepo.LinkRepository) *LinkService {
 	}
 }
 
-func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Link, error) {
+func (s *LinkService) Create(ctx context.Context, userID string, originalURL string) (*model.Link, error) {
 	if err := validateURL(originalURL); err != nil {
 		return nil, fmt.Errorf("create link: %w", err)
 	}
@@ -53,6 +53,7 @@ func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Li
 	}
 
 	link = &model.Link{
+		UserID:      userID,
 		Code:        code,
 		OriginalURL: originalURL,
 	}
@@ -74,7 +75,7 @@ func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Li
 	return link, nil
 }
 
-func (s *LinkService) CreateBatch(ctx context.Context, originalURLs []string) ([]*model.Link, error) {
+func (s *LinkService) CreateBatch(ctx context.Context, userID string, originalURLs []string) ([]*model.Link, error) {
 	for _, originalURL := range originalURLs {
 		if err := validateURL(originalURL); err != nil {
 			return nil, fmt.Errorf("create batch link: %w", err)
@@ -104,6 +105,7 @@ func (s *LinkService) CreateBatch(ctx context.Context, originalURLs []string) ([
 		}
 
 		link = &model.Link{
+			UserID:      userID,
 			Code:        code,
 			OriginalURL: originalURL,
 		}
@@ -135,6 +137,19 @@ func (s *LinkService) GetByCode(ctx context.Context, code string) (*model.Link, 
 	}
 
 	return nil, fmt.Errorf("get link by code: %w", err)
+}
+
+func (s *LinkService) GetListByUserID(ctx context.Context, userID string) ([]*model.Link, error) {
+	links, err := s.repo.FindByUserID(ctx, userID)
+	if err == nil {
+		return links, nil
+	}
+
+	if errors.Is(err, linkrepo.ErrNotFound) {
+		return nil, fmt.Errorf("get link by userID: %w", ErrNotFound)
+	}
+
+	return nil, fmt.Errorf("get link by userID: %w", err)
 }
 
 func (s *LinkService) findFreeCode(ctx context.Context, originalURL string) (string, error) {

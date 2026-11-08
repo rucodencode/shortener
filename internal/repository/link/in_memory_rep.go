@@ -71,3 +71,17 @@ func (r *InMemoryRepository) SaveBatch(ctx context.Context, links []*model.Link)
 
 	return nil
 }
+
+func (r *InMemoryRepository) FindByUserID(ctx context.Context, userID string) ([]*model.Link, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var links []*model.Link
+	for _, link := range r.links {
+		if link.UserID == userID {
+			links = append(links, link)
+		}
+	}
+
+	return links, nil
+}
