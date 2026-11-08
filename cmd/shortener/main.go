@@ -18,14 +18,17 @@ import (
 )
 
 func main() {
-	cfg := config.NewConfig()
+	var err error
+	cfg, err := config.NewConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		log.Fatal(err)
 	}
 
 	var pool *pgxpool.Pool
-	var err error
 
 	if cfg.RepoType == config.RepoTypePostgres {
 		pool, err = db.NewDB(db.Config{DataSource: cfg.DB.DataSourceName})
@@ -39,7 +42,7 @@ func main() {
 		logger.Log.Fatal("repository initialization failed", zap.Error(err))
 	}
 
-	rt := router.NewRouter()
+	rt := router.NewRouter(cfg)
 
 	linkService := service.NewLinkService(repo)
 	webLinkHandler := web.NewLinkHandler(linkService, cfg.BaseURL)

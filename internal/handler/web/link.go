@@ -7,12 +7,13 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rucodencode/shortener/internal/middleware"
 	"github.com/rucodencode/shortener/internal/model"
 	"github.com/rucodencode/shortener/internal/service"
 )
 
 type LinkService interface {
-	Create(ctx context.Context, originalURL string) (*model.Link, error)
+	Create(ctx context.Context, userID string, originalURL string) (*model.Link, error)
 	GetByCode(ctx context.Context, code string) (*model.Link, error)
 }
 
@@ -35,8 +36,10 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
 	originalURL := string(body)
-	link, err := h.service.Create(r.Context(), originalURL)
+	link, err := h.service.Create(r.Context(), userID, originalURL)
 
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidURL) {
