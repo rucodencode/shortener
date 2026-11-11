@@ -121,6 +121,41 @@ func (r *FileRepository) FindByUserID(ctx context.Context, userID string) ([]*mo
 	return links, nil
 }
 
+func (r *FileRepository) DeleteByCodesAndUserID(ctx context.Context, userID string, codes []string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	restoreLinks := make(map[string]bool, len(codes))
+
+	for _, code := range codes {
+		link, ok := r.links[code]
+		if !ok {
+			continue
+		}
+
+		if link.UserID == userID && !link.DeletedFlag {
+			restoreLinks[link.Code] = r.links[link.Code].DeletedFlag
+
+			updated := *r.links[link.Code]
+			updated.DeletedFlag = true
+			r.links[link.Code] = &updated
+		}
+	}
+
+	if err := r.persistToDisk(); err != nil {
+		for code, deletedFlag := range restoreLinks {
+			updated := *r.links[code]
+			updated.DeletedFlag = deletedFlag
+
+			r.links[code] = &updated
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 func (r *FileRepository) persistToDisk() error {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {

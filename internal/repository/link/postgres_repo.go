@@ -94,10 +94,10 @@ func (r *PostgresRepository) SaveBatch(ctx context.Context, links []*model.Link)
 func (r *PostgresRepository) FindByCode(ctx context.Context, code string) (*model.Link, error) {
 	link := &model.Link{}
 
-	sqlText := "SELECT user_id, code, original_url FROM links WHERE code = $1"
+	sqlText := "SELECT user_id, code, original_url, is_deleted FROM links WHERE code = $1"
 	row := r.pool.QueryRow(ctx, sqlText, code)
 
-	err := row.Scan(&link.UserID, &link.Code, &link.OriginalURL)
+	err := row.Scan(&link.UserID, &link.Code, &link.OriginalURL, &link.DeletedFlag)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -112,9 +112,9 @@ func (r *PostgresRepository) FindByCode(ctx context.Context, code string) (*mode
 func (r *PostgresRepository) FindByOriginalURL(ctx context.Context, originalURL string) (*model.Link, error) {
 	link := &model.Link{}
 
-	sqlText := "SELECT user_id, code, original_url FROM links WHERE original_url = $1"
+	sqlText := "SELECT user_id, code, original_url, is_deleted FROM links WHERE original_url = $1"
 	row := r.pool.QueryRow(ctx, sqlText, originalURL)
-	err := row.Scan(&link.UserID, &link.Code, &link.OriginalURL)
+	err := row.Scan(&link.UserID, &link.Code, &link.OriginalURL, &link.DeletedFlag)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -129,7 +129,7 @@ func (r *PostgresRepository) FindByOriginalURL(ctx context.Context, originalURL 
 func (r *PostgresRepository) FindByUserID(ctx context.Context, userID string) ([]*model.Link, error) {
 	links := []*model.Link{}
 
-	sqlText := "SELECT user_id, code, original_url FROM links WHERE user_id = $1"
+	sqlText := "SELECT user_id, code, original_url, is_deleted FROM links WHERE user_id = $1"
 	rows, err := r.pool.Query(ctx, sqlText, userID)
 	if err != nil {
 		return nil, fmt.Errorf("find link by userID: %w", err)
@@ -139,7 +139,7 @@ func (r *PostgresRepository) FindByUserID(ctx context.Context, userID string) ([
 
 	for rows.Next() {
 		link := &model.Link{}
-		err := rows.Scan(&link.UserID, &link.Code, &link.OriginalURL)
+		err := rows.Scan(&link.UserID, &link.Code, &link.OriginalURL, &link.DeletedFlag)
 		if err != nil {
 			return nil, fmt.Errorf("find link by userID: %w", err)
 		}
@@ -152,4 +152,38 @@ func (r *PostgresRepository) FindByUserID(ctx context.Context, userID string) ([
 	}
 
 	return links, nil
+}
+
+func (r *PostgresRepository) DeleteByCodesAndUserID(ctx context.Context, userID string, codes []string) error {
+	if len(codes) == 0 {
+		return nil
+	}
+
+	placeholders := make([]string, 0, len(codes))
+	args := make([]any, 0, len(codes)+1)
+	args = append(args, userID)
+
+	for i, code := range codes {
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i+2))
+		args = append(args, code)
+	}
+
+	sqlText := "UPDATE links SET is_deleted = TRUE WHERE user_id = $1 AND " +
+		"code IN (" + strings.Join(placeholders, ", ") + ")"
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete links transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, sqlText, args...); err != nil {
+		return fmt.Errorf("delete links: %w", classifyWriteError(err))
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete links transaction: %w", classifyWriteError(err))
+	}
+
+	return nil
 }

@@ -85,3 +85,23 @@ func (r *InMemoryRepository) FindByUserID(ctx context.Context, userID string) ([
 
 	return links, nil
 }
+
+func (r *InMemoryRepository) DeleteByCodesAndUserID(ctx context.Context, userID string, codes []string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, code := range codes {
+		link, ok := r.links[code]
+		if !ok {
+			continue
+		}
+
+		if link.UserID == userID && !link.DeletedFlag {
+			updated := *link
+			updated.DeletedFlag = true
+			r.links[link.Code] = &updated
+		}
+	}
+
+	return nil
+}

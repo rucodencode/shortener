@@ -40,6 +40,7 @@ type LinkService interface {
 	Create(ctx context.Context, userID string, originalURL string) (*model.Link, error)
 	CreateBatch(ctx context.Context, userID string, originalURLs []string) ([]*model.Link, error)
 	GetListByUserID(ctx context.Context, userID string) ([]*model.Link, error)
+	DeleteLinksByCodes(ctx context.Context, userID string, codes []string) error
 }
 
 type LinkHandler struct {
@@ -194,4 +195,27 @@ func (h *LinkHandler) GetListByUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Log.Debug("sending HTTP response", zap.Int("status", http.StatusCreated))
+}
+
+func (h *LinkHandler) DeleteLinks(w http.ResponseWriter, r *http.Request) {
+	logger.Log.Debug("delete links started")
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	var codes []string
+	dec := json.NewDecoder(r.Body)
+
+	if err := dec.Decode(&codes); err != nil {
+		logger.Log.Debug("cannot decode batch request", zap.Error(err))
+		http.Error(w, "bad request: invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err := h.service.DeleteLinksByCodes(r.Context(), userID, codes)
+	if err != nil {
+		logger.Log.Error("failed to delete links", zap.Error(err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

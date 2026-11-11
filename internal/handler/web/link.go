@@ -82,5 +82,10 @@ func (h *LinkHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if link.DeletedFlag {
+		w.WriteHeader(http.StatusGone)
+		return
+	}
+
 	http.Redirect(w, r, link.OriginalURL, http.StatusTemporaryRedirect)
 }
