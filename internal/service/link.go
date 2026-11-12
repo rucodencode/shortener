@@ -22,6 +22,8 @@ var (
 	ErrAlreadyExists  = errors.New("link already exists")
 )
 
+var shortCodePattern = regexp.MustCompile(`^[A-Za-z0-9]{8}$`)
+
 type deleteLinks struct {
 	userID string
 	codes  []string
@@ -243,8 +245,6 @@ func validateURL(rawURL string) error {
 }
 
 func validateCode(code string) bool {
-	var shortCodePattern = regexp.MustCompile(`^[A-Za-z0-9]{8}$`)
-
 	return shortCodePattern.MatchString(code)
 }
 

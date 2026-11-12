@@ -1,8 +1,10 @@
 package config
 
 import (
-	"errors"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
+	"fmt"
 	"os"
 )
 
@@ -33,7 +35,7 @@ func NewConfig() (Config, error) {
 	flag.StringVar(&cfg.LogLevel, "l", "info", "log level")
 	flag.StringVar(&cfg.FileStoragePath, "f", "", "file storage path")
 	flag.StringVar(&cfg.DB.DataSourceName, "d", "", "DB data source name")
-	flag.StringVar(&cfg.TokenSigningKey, "skey", "12345678123456781234567812345678", "Token signing key")
+	flag.StringVar(&cfg.TokenSigningKey, "skey", "", "Token signing key")
 	flag.Parse()
 
 	envServerAddress, ok := os.LookupEnv("SERVER_ADDRESS")
@@ -66,8 +68,21 @@ func NewConfig() (Config, error) {
 		cfg.TokenSigningKey = envTokenSigningKey
 	}
 
+	if len(cfg.TokenSigningKey) == 0 {
+		token := make([]byte, 32)
+		_, err := rand.Read(token)
+		if err != nil {
+			return Config{}, fmt.Errorf("create token for jwt: %w", err)
+		}
+
+		cfg.TokenSigningKey = hex.EncodeToString(token)
+	}
+
 	if len(cfg.TokenSigningKey) < 32 {
-		return Config{}, errors.New("token signing key must contain at least 32 bytes")
+		return Config{}, fmt.Errorf(
+			"JWT signing key has %d bytes, want at least 32",
+			len(cfg.TokenSigningKey),
+		)
 	}
 
 	if cfg.DB.DataSourceName != "" {
