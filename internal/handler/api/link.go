@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/rucodencode/shortener/internal/logger"
+	"github.com/rucodencode/shortener/internal/middleware"
 	"github.com/rucodencode/shortener/internal/model"
 	"github.com/rucodencode/shortener/internal/service"
 	"go.uber.org/zap"
@@ -30,9 +31,16 @@ type BatchCreateLinkResponse struct {
 	ShortURL      string `json:"short_url"`
 }
 
+type GetListByUserIDResponse struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
 type LinkService interface {
-	Create(ctx context.Context, originalURL string) (*model.Link, error)
-	CreateBatch(ctx context.Context, originalURLs []string) ([]*model.Link, error)
+	Create(ctx context.Context, userID string, originalURL string) (*model.Link, error)
+	CreateBatch(ctx context.Context, userID string, originalURLs []string) ([]*model.Link, error)
+	GetListByUserID(ctx context.Context, userID string) ([]*model.Link, error)
+	DeleteLinksByCodes(ctx context.Context, userID string, codes []string) error
 }
 
 type LinkHandler struct {
@@ -63,7 +71,9 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.service.Create(r.Context(), req.URL)
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	link, err := h.service.Create(r.Context(), userID, req.URL)
 
 	sendResponse := func(link *model.Link, statusCode int) {
 		resp := CreateLinkResponse{
@@ -118,7 +128,8 @@ func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		originalURLs = append(originalURLs, v.OriginalURL)
 	}
 
-	links, err := h.service.CreateBatch(r.Context(), originalURLs)
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	links, err := h.service.CreateBatch(r.Context(), userID, originalURLs)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidURL):
@@ -150,4 +161,61 @@ func (h *LinkHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Log.Debug("sending HTTP response", zap.Int("status", http.StatusCreated))
+}
+
+func (h *LinkHandler) GetListByUser(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	links, err := h.service.GetListByUserID(r.Context(), userID)
+	if err != nil {
+		logger.Log.Error("failed to create batch links", zap.Error(err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if len(links) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	results := make([]GetListByUserIDResponse, 0, len(links))
+	for _, link := range links {
+		results = append(results, GetListByUserIDResponse{
+			ShortURL:    h.baseURL + "/" + link.Code,
+			OriginalURL: link.OriginalURL,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(results); err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+
+	logger.Log.Debug("sending HTTP response", zap.Int("status", http.StatusCreated))
+}
+
+func (h *LinkHandler) DeleteLinks(w http.ResponseWriter, r *http.Request) {
+	logger.Log.Debug("delete links started")
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	var codes []string
+	dec := json.NewDecoder(r.Body)
+
+	if err := dec.Decode(&codes); err != nil {
+		logger.Log.Debug("cannot decode batch request", zap.Error(err))
+		http.Error(w, "bad request: invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err := h.service.DeleteLinksByCodes(r.Context(), userID, codes)
+	if err != nil {
+		logger.Log.Error("failed to delete links", zap.Error(err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

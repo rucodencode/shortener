@@ -71,3 +71,37 @@ func (r *InMemoryRepository) SaveBatch(ctx context.Context, links []*model.Link)
 
 	return nil
 }
+
+func (r *InMemoryRepository) FindByUserID(ctx context.Context, userID string) ([]*model.Link, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var links []*model.Link
+	for _, link := range r.links {
+		if link.UserID == userID {
+			links = append(links, link)
+		}
+	}
+
+	return links, nil
+}
+
+func (r *InMemoryRepository) DeleteByCodesAndUserID(ctx context.Context, userID string, codes []string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, code := range codes {
+		link, ok := r.links[code]
+		if !ok {
+			continue
+		}
+
+		if link.UserID == userID && !link.DeletedFlag {
+			updated := *link
+			updated.DeletedFlag = true
+			r.links[link.Code] = &updated
+		}
+	}
+
+	return nil
+}

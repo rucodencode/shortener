@@ -16,4 +16,6 @@ type LinkRepository interface {
 	FindByCode(ctx context.Context, code string) (*model.Link, error)
 	FindByOriginalURL(ctx context.Context, originalURL string) (*model.Link, error)
 	SaveBatch(ctx context.Context, links []*model.Link) error
+	FindByUserID(ctx context.Context, userID string) ([]*model.Link, error)
+	DeleteByCodesAndUserID(ctx context.Context, userID string, codes []string) error
 }

@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"sync"
 
+	"github.com/rucodencode/shortener/internal/logger"
 	"github.com/rucodencode/shortener/internal/model"
 	linkrepo "github.com/rucodencode/shortener/internal/repository/link"
+	"go.uber.org/zap"
 )
 
 var (
@@ -19,18 +22,31 @@ var (
 	ErrAlreadyExists  = errors.New("link already exists")
 )
 
+var shortCodePattern = regexp.MustCompile(`^[A-Za-z0-9]{8}$`)
+
+type deleteLinks struct {
+	userID string
+	codes  []string
+}
+
 type LinkService struct {
-	mu   sync.Mutex
-	repo linkrepo.LinkRepository
+	mu              sync.Mutex
+	repo            linkrepo.LinkRepository
+	deleteLinksChan chan deleteLinks
 }
 
 func NewLinkService(repo linkrepo.LinkRepository) *LinkService {
-	return &LinkService{
-		repo: repo,
+	instance := &LinkService{
+		repo:            repo,
+		deleteLinksChan: make(chan deleteLinks, 1024),
 	}
+
+	go instance.flushDeleteLinks()
+
+	return instance
 }
 
-func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Link, error) {
+func (s *LinkService) Create(ctx context.Context, userID string, originalURL string) (*model.Link, error) {
 	if err := validateURL(originalURL); err != nil {
 		return nil, fmt.Errorf("create link: %w", err)
 	}
@@ -53,6 +69,7 @@ func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Li
 	}
 
 	link = &model.Link{
+		UserID:      userID,
 		Code:        code,
 		OriginalURL: originalURL,
 	}
@@ -74,7 +91,7 @@ func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Li
 	return link, nil
 }
 
-func (s *LinkService) CreateBatch(ctx context.Context, originalURLs []string) ([]*model.Link, error) {
+func (s *LinkService) CreateBatch(ctx context.Context, userID string, originalURLs []string) ([]*model.Link, error) {
 	for _, originalURL := range originalURLs {
 		if err := validateURL(originalURL); err != nil {
 			return nil, fmt.Errorf("create batch link: %w", err)
@@ -104,6 +121,7 @@ func (s *LinkService) CreateBatch(ctx context.Context, originalURLs []string) ([
 		}
 
 		link = &model.Link{
+			UserID:      userID,
 			Code:        code,
 			OriginalURL: originalURL,
 		}
@@ -124,6 +142,43 @@ func (s *LinkService) CreateBatch(ctx context.Context, originalURLs []string) ([
 	return result, nil
 }
 
+func (s *LinkService) DeleteLinksByCodes(ctx context.Context, userID string, codes []string) error {
+	data := deleteLinks{
+		userID: userID,
+		codes:  codes,
+	}
+
+	select {
+	case s.deleteLinksChan <- data:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *LinkService) flushDeleteLinks() {
+	for link := range s.deleteLinksChan {
+		validCodes := make([]string, 0, len(link.codes))
+		for _, code := range link.codes {
+			if !validateCode(code) {
+				logger.Log.Debug("link code is not valid", zap.String("code", code))
+				continue
+			}
+			validCodes = append(validCodes, code)
+		}
+
+		if len(validCodes) == 0 {
+			continue
+		}
+
+		err := s.repo.DeleteByCodesAndUserID(context.Background(), link.userID, validCodes)
+		if err != nil {
+			logger.Log.Debug("cannot delete links", zap.Error(err))
+		}
+	}
+
+}
+
 func (s *LinkService) GetByCode(ctx context.Context, code string) (*model.Link, error) {
 	link, err := s.repo.FindByCode(ctx, code)
 	if err == nil {
@@ -135,6 +190,19 @@ func (s *LinkService) GetByCode(ctx context.Context, code string) (*model.Link, 
 	}
 
 	return nil, fmt.Errorf("get link by code: %w", err)
+}
+
+func (s *LinkService) GetListByUserID(ctx context.Context, userID string) ([]*model.Link, error) {
+	links, err := s.repo.FindByUserID(ctx, userID)
+	if err == nil {
+		return links, nil
+	}
+
+	if errors.Is(err, linkrepo.ErrNotFound) {
+		return nil, fmt.Errorf("get link by userID: %w", ErrNotFound)
+	}
+
+	return nil, fmt.Errorf("get link by userID: %w", err)
 }
 
 func (s *LinkService) findFreeCode(ctx context.Context, originalURL string) (string, error) {
@@ -179,6 +247,10 @@ func validateURL(rawURL string) error {
 	}
 
 	return nil
+}
+
+func validateCode(code string) bool {
+	return shortCodePattern.MatchString(code)
 }
 
 func generateCode(originalURL string) string {
