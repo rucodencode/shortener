@@ -12,7 +12,7 @@ import (
 
 func NewRouter(cfg config.Config) *chi.Mux {
 	jwtManager := auth.NewJWTManager(auth.ConfigJWT{
-		SingingKey: cfg.TokenSigningKey,
+		SigningKey: cfg.TokenSigningKey,
 	})
 	manager := middleware.NewAuthMiddleware(jwtManager)
 

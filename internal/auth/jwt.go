@@ -18,16 +18,16 @@ type Claims struct {
 }
 
 type ConfigJWT struct {
-	SingingKey string
+	SigningKey string
 }
 
 type JWTManager struct {
-	singingKey []byte
+	signingKey []byte
 }
 
 func NewJWTManager(cfg ConfigJWT) *JWTManager {
 	return &JWTManager{
-		singingKey: append([]byte(nil), cfg.SingingKey...),
+		signingKey: append([]byte(nil), cfg.SigningKey...),
 	}
 }
 
@@ -40,7 +40,7 @@ func (m *JWTManager) Generate(userID string) (string, error) {
 		UserID: userID,
 	})
 
-	tokenString, err := token.SignedString(m.singingKey)
+	tokenString, err := token.SignedString(m.signingKey)
 	if err != nil {
 		return "", err
 	}
@@ -56,7 +56,7 @@ func (m *JWTManager) Parse(tokenString string) (string, error) {
 				return nil, fmt.Errorf("unexpercted signing method: %v", t.Header["alg"])
 			}
 
-			return m.singingKey, nil
+			return m.signingKey, nil
 		},
 	)
 	if err != nil {

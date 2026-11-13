@@ -157,16 +157,21 @@ func (s *LinkService) DeleteLinksByCodes(ctx context.Context, userID string, cod
 }
 
 func (s *LinkService) flushDeleteLinks() {
-skip:
 	for link := range s.deleteLinksChan {
+		validCodes := make([]string, 0, len(link.codes))
 		for _, code := range link.codes {
 			if !validateCode(code) {
-				logger.Log.Debug("link code is not valid: %s", zap.String("code", code))
-				continue skip
+				logger.Log.Debug("link code is not valid", zap.String("code", code))
+				continue
 			}
+			validCodes = append(validCodes, code)
 		}
 
-		err := s.repo.DeleteByCodesAndUserID(context.TODO(), link.userID, link.codes)
+		if len(validCodes) == 0 {
+			continue
+		}
+
+		err := s.repo.DeleteByCodesAndUserID(context.Background(), link.userID, validCodes)
 		if err != nil {
 			logger.Log.Debug("cannot delete links", zap.Error(err))
 		}
